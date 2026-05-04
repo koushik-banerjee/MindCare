@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+const RAW_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+const API_URL = RAW_API_URL.endsWith('/api') ? RAW_API_URL : `${RAW_API_URL.replace(/\/$/, '')}/api`
 
 // Generic API call helper
 async function apiCall<T>(
