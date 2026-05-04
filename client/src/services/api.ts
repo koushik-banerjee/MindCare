@@ -37,6 +37,20 @@ async function apiCall<T>(
   return response.json()
 }
 
+export const api = {
+  get: <T>(endpoint: string, options?: RequestInit) =>
+    apiCall<T>(endpoint, {
+      ...options,
+      method: 'GET',
+    }),
+  post: <T>(endpoint: string, body?: unknown, options?: RequestInit) =>
+    apiCall<T>(endpoint, {
+      ...options,
+      method: 'POST',
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
+}
+
 // Chat API
 export const chatApi = {
   sendMessage: (message: string) =>

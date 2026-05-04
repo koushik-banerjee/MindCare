@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/services/supabase";
 import { api } from "@/services/api";
-import { Loading } from "@/components/loading";
+import Loading from "@/components/loading";
 
 export default function AuthCallbackPage() {
   const [error, setError] = useState<string | null>(null);
