@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { supabase } from "../supabaseClient.js";
-import { authMiddleware } from "../middleware/roleAuth.js";
+import { authenticate } from "../middleware/roleAuth.js";
 
 const router = Router();
 
-router.get("/profile", authMiddleware, async (req, res) => {
+router.get("/profile", authenticate, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("profiles")
@@ -42,4 +42,4 @@ router.post("/register-profile", async (req, res) => {
   }
 });
 
-export { router as authRoutes };
+export default router;
