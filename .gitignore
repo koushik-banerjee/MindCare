@@ -1,2 +1,31 @@
-client/.env
-server/.env
+# Client dependencies
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+
+# Server dependencies
+server/node_modules/
+server/dist/
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing
+coverage/
+
+# Misc
+.turbo

@@ -1,114 +1,126 @@
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
-import { Button } from "@/components/ui/button";
+import { Link, useNavigate } from 'react-router-dom'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
+import { useAuth } from '@/hooks/useAuth'
+import { LuBrain } from "react-icons/lu"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { MessageCircle, Calendar, BookOpen, Users, LayoutDashboard, LogOut } from "lucide-react";
+  MessageCircle,
+  Calendar,
+  BookOpen,
+  Users,
+  LayoutDashboard,
+  LogOut
+} from 'lucide-react'
 
-export function Navbar() {
-  const { user, profile, loading } = useAuth();
-  const navigate = useNavigate();
+interface NavbarProps {
+  onClose?: () => void
+}
+
+export default function Navbar({ onClose }: NavbarProps) {
+  const { session, user, signOut } = useAuth()
+  const navigate = useNavigate()
 
   const handleSignOut = async () => {
-    const { supabase } = await import("@/services/supabase");
-    await supabase.auth.signOut();
-    navigate("/login");
-  };
+    await signOut.mutateAsync()
+    navigate('/')
+  }
+
+  const initials = user?.full_name
+    ? user.full_name
+      .split(' ')
+      .map((n: string) => n[0])
+      .join('')
+      .toUpperCase()
+    : user?.email?.[0].toUpperCase() || 'U'
+
+  if (!session) return null
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-14 items-center px-4">
-        <Link to="/" className="flex items-center gap-2 font-semibold text-primary">
-          <span className="text-xl">🧠</span>
-          <span>MINDCARE</span>
+    <aside className="flex h-full w-full flex-col border-r bg-background">
+      <div className="border-b px-5 py-4">
+        <Link to="/chat" className="flex items-center gap-2 group/logo" onClick={onClose}>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 transition-colors group-hover/logo:bg-primary/20">
+            <LuBrain className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <span className="text-xl font-bold tracking-tight text-foreground transition-colors group-hover/logo:text-primary">
+              MindCare
+            </span>
+            <p className="text-[10px] leading-none text-muted-foreground mt-0.5">Mental Wellness</p>
+          </div>
         </Link>
-        <nav className="ml-8 flex items-center gap-6">
-          {user && (
-            <>
-              <Link
-                to="/chat"
-                className="flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <MessageCircle className="h-4 w-4" />
-                AI Chat
-              </Link>
-              <Link
-                to="/booking"
-                className="flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-              >
+      </div>
+
+      <div className="px-3 py-4">
+        <div className="space-y-1">
+          <Button variant="ghost" size="sm" asChild className="w-full justify-start" onClick={onClose}>
+            <Link to="/chat" className="flex items-center gap-2">
+              <MessageCircle className="h-4 w-4" />
+              AI Chat
+            </Link>
+          </Button>
+
+          {user?.role !== 'admin' && (
+            <Button variant="ghost" size="sm" asChild className="w-full justify-start" onClick={onClose}>
+              <Link to="/booking" className="flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
-                Book
+                Booking
               </Link>
-              <Link
-                to="/resources"
-                className="flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <BookOpen className="h-4 w-4" />
-                Resources
-              </Link>
-              <Link
-                to="/community"
-                className="flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <Users className="h-4 w-4" />
-                Community
-              </Link>
-              {profile?.role === "admin" && (
-                <Link
-                  to="/admin"
-                  className="flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <LayoutDashboard className="h-4 w-4" />
-                  Admin
-                </Link>
-              )}
-            </>
+            </Button>
           )}
-        </nav>
-        <div className="ml-auto flex items-center gap-2">
-          {loading ? (
-            <div className="h-8 w-20 animate-pulse rounded-md bg-muted" />
-          ) : user ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm">
-                  {user.email}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>
-                  <div className="flex flex-col">
-                    <span>{user.email}</span>
-                    <span className="text-xs font-normal text-muted-foreground capitalize">
-                      {profile?.role ?? "student"}
-                    </span>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sign out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <>
-              <Button variant="ghost" asChild>
-                <Link to="/login">Login</Link>
-              </Button>
-              <Button asChild>
-                <Link to="/register">Register</Link>
-              </Button>
-            </>
+
+          <Button variant="ghost" size="sm" asChild className="w-full justify-start" onClick={onClose}>
+            <Link to="/resources" className="flex items-center gap-2">
+              <BookOpen className="h-4 w-4" />
+              Resources
+            </Link>
+          </Button>
+
+          <Button variant="ghost" size="sm" asChild className="w-full justify-start" onClick={onClose}>
+            <Link to="/community" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Peer Support
+            </Link>
+          </Button>
+
+          {user?.role === 'admin' && (
+            <Button variant="ghost" size="sm" asChild className="w-full justify-start" onClick={onClose}>
+              <Link to="/admin" className="flex items-center gap-2">
+                <LayoutDashboard className="h-4 w-4" />
+                Admin Dashboard
+              </Link>
+            </Button>
           )}
         </div>
       </div>
-    </header>
-  );
+
+      <div className="mt-auto border-t p-4">
+        <Link
+          to="/profile"
+          className="flex items-center gap-3 rounded-lg p-2 hover:bg-muted transition-colors mb-4 group"
+          onClick={onClose}
+        >
+          <Avatar key={user?.avatar_url} className="h-9 w-9 border border-primary/10">
+            <AvatarImage src={user?.avatar_url} className="object-cover" />
+            <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex flex-col min-w-0">
+            <p className="truncate text-sm font-medium leading-none group-hover:text-primary transition-colors">
+              {user?.full_name || user?.email}
+            </p>
+            <p className="truncate text-xs text-muted-foreground capitalize mt-1">
+              {user?.role}
+            </p>
+          </div>
+        </Link>
+
+        <Button variant="outline" size="sm" onClick={handleSignOut} className="w-full gap-2">
+          <LogOut className="h-4 w-4" />
+          Logout
+        </Button>
+      </div>
+    </aside>
+  )
 }

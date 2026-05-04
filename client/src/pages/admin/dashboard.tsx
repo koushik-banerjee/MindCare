@@ -1,9 +1,6 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/services/api";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import {
   Table,
   TableBody,
@@ -11,367 +8,241 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, Users, MessageSquare, Video, Trash2 } from "lucide-react";
+} from '@/components/ui/table'
+import { adminApi, resourceApi } from '@/services/api'
+import { Users, Calendar, BookOpen, Trash2 } from 'lucide-react'
+import { VideoUploadOverlay } from '@/components/VideoUploadOverlay'
 
-export default function AdminDashboardPage() {
-  const [deleteTarget, setDeleteTarget] = useState<{
-    type: string;
-    id: string;
-  } | null>(null);
-  const queryClient = useQueryClient();
 
-  interface BookingRow {
-    id: string;
-    student?: { full_name?: string; email?: string };
-    consultant?: { full_name?: string; email?: string };
-    slot_date: string;
-    slot_time: string;
-    status: string;
-  }
+export default function AdminDashboard() {
+  const queryClient = useQueryClient()
 
-  interface ConsultantRow {
-    id: string;
-    full_name?: string;
-    email?: string;
-  }
+  const { data: allBookings, isLoading: bookingsLoading } = useQuery({
+    queryKey: ['adminBookings'],
+    queryFn: adminApi.getAllBookings,
+  })
 
-  interface PostRow {
-    id: string;
-    author?: { full_name?: string; email?: string };
-    content: string;
-    created_at: string;
-  }
+  const { data: allUsers, isLoading: usersLoading } = useQuery({
+    queryKey: ['adminUsers'],
+    queryFn: adminApi.getAllUsers,
+  })
 
-  interface VideoRow {
-    id: string;
-    title: string;
-    category: string;
-    language: string;
-    enabled: boolean;
-  }
+  const { data: resources, isLoading: resourcesLoading } = useQuery({
+    queryKey: ['adminResources'],
+    queryFn: () => resourceApi.getResources({}),
+  })
 
-  const { data: bookings = [], isLoading: bookingsLoading } = useQuery({
-    queryKey: ["admin-bookings"],
-    queryFn: () => api.get<BookingRow[]>("/admin/bookings"),
-  });
+  const updateUserRole = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: string }) =>
+      adminApi.updateUserRole(userId, role),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminUsers'] }),
+  })
 
-  const { data: consultants = [] } = useQuery({
-    queryKey: ["admin-consultants"],
-    queryFn: () => api.get<ConsultantRow[]>("/admin/consultants"),
-  });
+  const deleteResource = useMutation({
+    mutationFn: resourceApi.deleteResource,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminResources'] }),
+  })
 
-  const { data: postsData } = useQuery({
-    queryKey: ["admin-community-posts"],
-    queryFn: () => api.get<{ posts: PostRow[] }>("/admin/community-posts"),
-  });
+  const consultantCount = allUsers?.filter((item: any) => item.role === 'consultant').length || 0
+  const activeBookings = allBookings?.filter((item: any) => ['pending', 'approved'].includes(item.status)).length || 0
 
-  const { data: youtubeMetadata = [] } = useQuery({
-    queryKey: ["admin-youtube-metadata"],
-    queryFn: () => api.get<VideoRow[]>("/admin/youtube-metadata"),
-  });
-
-  const syncMutation = useMutation({
-    mutationFn: () => api.post("/admin/youtube-metadata/sync", {}),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-youtube-metadata"] });
-    },
-  });
-
-  const deleteBookingMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/admin/bookings/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-bookings"] });
-      setDeleteTarget(null);
-    },
-  });
-
-  const deletePostMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/admin/community-posts/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-community-posts"] });
-      setDeleteTarget(null);
-    },
-  });
-
-  const toggleVideoMutation = useMutation({
-    mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }) => {
-      await api.patch(`/admin/youtube-metadata/${id}`, { enabled });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-youtube-metadata"] });
-    },
-  });
-
-  const handleDelete = () => {
-    if (!deleteTarget) return;
-    if (deleteTarget.type === "booking") {
-      deleteBookingMutation.mutate(deleteTarget.id);
-    } else if (deleteTarget.type === "post") {
-      deletePostMutation.mutate(deleteTarget.id);
+  const getStatusBadge = (status: string) => {
+    const styles: Record<string, string> = {
+      pending: 'bg-amber-100 text-amber-800',
+      approved: 'bg-emerald-100 text-emerald-800',
+      rejected: 'bg-rose-100 text-rose-800',
+      completed: 'bg-cyan-100 text-cyan-800',
     }
-  };
 
-  const posts = postsData?.posts ?? [];
+    return (
+      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${styles[status] || 'bg-slate-100 text-slate-800'}`}>
+        {status.charAt(0).toUpperCase() + status.slice(1)}
+      </span>
+    )
+  }
+
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
-        <p className="text-muted-foreground">
-          Manage bookings, consultants, community, and resources
+    <div className="max-w-7xl mx-auto space-y-6">
+      <div className="rounded-2xl border bg-white p-6">
+        <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Administration</p>
+        <h1 className="mt-2 text-3xl font-semibold">Admin Dashboard</h1>
+        <p className="mt-2 text-muted-foreground">
+          Monitor platform performance, manage users, and keep resources up to date.
         </p>
       </div>
 
-      <Tabs defaultValue="bookings">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="bookings" className="flex items-center gap-2">
-            <Calendar className="h-4 w-4" />
-            Bookings
-          </TabsTrigger>
-          <TabsTrigger value="consultants" className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            Consultants
-          </TabsTrigger>
-          <TabsTrigger value="community" className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4" />
-            Community
-          </TabsTrigger>
-          <TabsTrigger value="resources" className="flex items-center gap-2">
-            <Video className="h-4 w-4" />
-            Resources
-          </TabsTrigger>
-        </TabsList>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold">{allUsers?.length || 0}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Bookings</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold">{activeBookings}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Consultants</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold">{consultantCount}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Resources</CardTitle>
+            <BookOpen className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold">{resources?.length || 0}</p>
+          </CardContent>
+        </Card>
+      </div>
 
-        <TabsContent value="bookings" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>All Bookings</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {bookingsLoading ? (
-                <Skeleton className="h-64 w-full" />
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Student</TableHead>
-                      <TableHead>Consultant</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Time</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {bookings.map((b: { id: string; student?: { full_name?: string; email?: string }; consultant?: { full_name?: string; email?: string }; slot_date: string; slot_time: string; status: string }) => (
-                      <TableRow key={b.id}>
-                        <TableCell>
-                          {b.student?.full_name || b.student?.email}
-                        </TableCell>
-                        <TableCell>
-                          {b.consultant?.full_name || b.consultant?.email}
-                        </TableCell>
-                        <TableCell>
-                          {new Date(b.slot_date).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell>{b.slot_time}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              b.status === "approved"
-                                ? "success"
-                                : b.status === "rejected"
-                                  ? "destructive"
-                                  : "secondary"
-                            }
-                          >
-                            {b.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() =>
-                              setDeleteTarget({ type: "booking", id: b.id })
-                            }
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="consultants" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Consultants</CardTitle>
-            </CardHeader>
-            <CardContent>
+      <div className="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Booking Oversight</CardTitle>
+            <CardDescription>Track student-consultant appointment status.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {bookingsLoading ? (
+              <div className="py-8 text-center">Loading bookings...</div>
+            ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {consultants.map((c) => (
-                    <TableRow key={c.id}>
-                      <TableCell>{c.full_name || "-"}</TableCell>
-                      <TableCell>{c.email}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="community" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Community Posts</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Author</TableHead>
-                    <TableHead>Content</TableHead>
+                    <TableHead>Student</TableHead>
+                    <TableHead>Consultant</TableHead>
                     <TableHead>Date</TableHead>
-                    <TableHead></TableHead>
+                    <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {posts.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell>
-                        {p.author?.full_name || p.author?.email}
-                      </TableCell>
-                      <TableCell className="max-w-[300px] truncate">
-                        {p.content}
-                      </TableCell>
-                      <TableCell>
-                        {new Date(p.created_at).toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() =>
-                            setDeleteTarget({ type: "post", id: p.id })
-                          }
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </TableCell>
+                  {allBookings?.map((booking: any) => (
+                    <TableRow key={booking.id}>
+                      <TableCell>{booking.student_name || 'Unknown'}</TableCell>
+                      <TableCell>{booking.consultant_name || 'Unknown'}</TableCell>
+                      <TableCell>{new Date(booking.appointment_date).toLocaleDateString()}</TableCell>
+                      <TableCell>{getStatusBadge(booking.status)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
+            )}
+          </CardContent>
+        </Card>
 
-        <TabsContent value="resources" className="mt-6">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>YouTube Video Metadata</CardTitle>
-                <Button
-                  onClick={() => syncMutation.mutate()}
-                  disabled={syncMutation.isPending}
-                >
-                  {syncMutation.isPending ? "Syncing..." : "Sync from YouTube"}
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
+        <Card>
+          <CardHeader>
+            <CardTitle>User Management</CardTitle>
+            <CardDescription>Update user roles and permissions.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {usersLoading ? (
+              <div className="py-8 text-center">Loading users...</div>
+            ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Language</TableHead>
-                    <TableHead>Enabled</TableHead>
-                    <TableHead></TableHead>
+                    <TableHead>User</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Update</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {youtubeMetadata.map((v) => (
-                    <TableRow key={v.id}>
-                      <TableCell className="max-w-[200px] truncate">
-                        {v.title}
-                      </TableCell>
-                      <TableCell>{v.category}</TableCell>
-                      <TableCell>{v.language}</TableCell>
+                  {allUsers?.slice(0, 12).map((user: any) => (
+                    <TableRow key={user.id}>
                       <TableCell>
-                        <Badge variant={v.enabled ? "success" : "secondary"}>
-                          {v.enabled ? "Yes" : "No"}
-                        </Badge>
+                        <p className="font-medium">{user.full_name || 'N/A'}</p>
+                        <p className="text-xs text-muted-foreground">{user.email}</p>
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            toggleVideoMutation.mutate({
-                              id: v.id,
-                              enabled: !v.enabled,
-                            })
+                        <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                          {user.role}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <select
+                          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                          value={user.role}
+                          onChange={(e) =>
+                            updateUserRole.mutate({ userId: user.id, role: e.target.value })
                           }
                         >
-                          {v.enabled ? "Disable" : "Enable"}
-                        </Button>
+                          <option value="student">Student</option>
+                          <option value="consultant">Consultant</option>
+                          <option value="admin">Admin</option>
+                        </select>
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
-      <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle>Resource Library</CardTitle>
+            <CardDescription>Moderate uploaded learning resources.</CardDescription>
+          </div>
+          <VideoUploadOverlay />
+        </CardHeader>
+
+        <CardContent>
+          {resourcesLoading ? (
+            <div className="py-8 text-center">Loading resources...</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Language</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {resources?.map((resource: any) => (
+                  <TableRow key={resource.id}>
+                    <TableCell className="max-w-xs truncate">{resource.title}</TableCell>
+                    <TableCell>{resource.media_type}</TableCell>
+                    <TableCell>{resource.language}</TableCell>
+                    <TableCell>{new Date(resource.created_at).toLocaleDateString()}</TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deleteResource.mutate(resource.id)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
-  );
+  )
 }

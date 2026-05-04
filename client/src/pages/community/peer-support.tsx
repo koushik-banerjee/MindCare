@@ -1,237 +1,280 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/services/api";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { MessageCircle, Send } from "lucide-react";
+import { useState, type FormEvent } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { communityApi } from '@/services/api'
+import { useAuth } from '@/hooks/useAuth'
+import { MessageSquare, Trash2, Send, User, Heart } from 'lucide-react'
 
 interface Post {
-  id: string;
-  content: string;
-  created_at: string;
-  author_id: string;
-  parent_id: string | null;
-  author?: { full_name: string | null; email: string };
+  id: string
+  author_id: string
+  author_name: string
+  content: string
+  parent_id?: string
+  created_at: string
+  replies?: Post[]
 }
 
-interface Reply extends Post {
-  parent_id: string;
-}
+export default function PeerSupport() {
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
+  const [newPost, setNewPost] = useState('')
+  const [replyingTo, setReplyingTo] = useState<string | null>(null)
+  const [replyContent, setReplyContent] = useState('')
 
-export default function PeerSupportPage() {
-  const [content, setContent] = useState("");
-  const [expandedPost, setExpandedPost] = useState<string | null>(null);
-  const [replyContent, setReplyContent] = useState<Record<string, string>>({});
-  const [page, setPage] = useState(1);
-  const queryClient = useQueryClient();
+  // Get all posts
+  const { data: posts, isLoading } = useQuery({
+    queryKey: ['posts'],
+    queryFn: communityApi.getPosts,
+  })
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["community-posts", page],
-    queryFn: () =>
-      api.get<{ posts: Post[]; page: number; pageSize: number }>(
-        `/community/posts?page=${page}`
-      ),
-  });
-
-  const createMutation = useMutation({
-    mutationFn: async (payload: { content: string; parentId?: string }) => {
-      return api.post<Post>("/community/posts", payload);
-    },
+  // Create post mutation
+  const createPost = useMutation({
+    mutationFn: ({ content, parentId }: { content: string; parentId?: string }) =>
+      communityApi.createPost(content, parentId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["community-posts"] });
-      setContent("");
+      queryClient.invalidateQueries({ queryKey: ['posts'] })
+      setNewPost('')
+      setReplyContent('')
+      setReplyingTo(null)
     },
-  });
+  })
 
-  const posts = data?.posts ?? [];
+  // Delete post mutation
+  const deletePost = useMutation({
+    mutationFn: communityApi.deletePost,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['posts'] })
+    },
+  })
 
-  const handleCreatePost = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!content.trim()) return;
-    createMutation.mutate({ content: content.trim() });
-  };
+  const handleSubmitPost = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!newPost.trim()) return
+    await createPost.mutateAsync({ content: newPost })
+  }
 
-  const handleReply = (postId: string) => {
-    const reply = replyContent[postId]?.trim();
-    if (!reply) return;
-    createMutation.mutate({ content: reply, parentId: postId });
-    setReplyContent((prev) => ({ ...prev, [postId]: "" }));
-    setExpandedPost(null);
-  };
+  const handleReply = async (postId: string) => {
+    if (!replyContent.trim()) return
+    await createPost.mutateAsync({ content: replyContent, parentId: postId })
+  }
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays < 7) return `${diffDays}d ago`
+    return date.toLocaleDateString()
+  }
+
+  // Filter top-level posts (no parent_id)
+  const topLevelPosts = posts?.filter((post: Post) => !post.parent_id) || []
+
+  // Get replies for a post
+  const getReplies = (postId: string) => {
+    return posts?.filter((post: Post) => post.parent_id === postId) || []
+  }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Peer Support</h1>
-        <p className="text-muted-foreground">
-          Share and connect with others in a supportive community
+    <div className="max-w-5xl mx-auto space-y-6 px-0 md:px-0">
+      <div className="rounded-2xl border bg-card p-6">
+        <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Community</p>
+        <h1 className="mt-2 text-3xl font-semibold">Peer Support</h1>
+        <p className="mt-2 text-muted-foreground">
+          Share experiences, ask for encouragement, and support others safely.
         </p>
       </div>
 
+      {/* Community Guidelines */}
+      <Card className="border-primary/20 bg-primary/5">
+        <CardContent className="pt-6">
+          <h3 className="font-semibold mb-2 flex items-center gap-2">
+            <Heart className="h-5 w-5 text-primary" />
+            Community Guidelines
+          </h3>
+          <ul className="text-sm text-muted-foreground space-y-1">
+            <li>• Be kind, respectful, and supportive</li>
+            <li>• Share experiences, not medical advice</li>
+            <li>• Respect privacy - don't share personal identifying information</li>
+            <li>• Report concerning content to moderators</li>
+          </ul>
+        </CardContent>
+      </Card>
+
+      {/* Create Post */}
       <Card>
         <CardHeader>
-          <h2 className="font-medium">Create a post</h2>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center">
+              <User className="h-6 w-6 text-white" />
+            </div>
+            <span className="font-semibold">{user?.full_name || 'Anonymous'}</span>
+          </div>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleCreatePost} className="space-y-3">
+          <form onSubmit={handleSubmitPost}>
             <Textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="What's on your mind?"
-              className="min-h-[100px]"
-              disabled={createMutation.isPending}
+              placeholder="Share your thoughts, experiences, or ask for support..."
+              value={newPost}
+              onChange={(e) => setNewPost(e.target.value)}
+              className="min-h-[100px] mb-3"
             />
-            <Button
-              type="submit"
-              disabled={!content.trim() || createMutation.isPending}
-            >
-              <Send className="mr-2 h-4 w-4" />
-              Post
-            </Button>
-            {createMutation.isError && (
-              <p className="text-sm text-destructive">
-                {(createMutation.error as Error).message}
-              </p>
-            )}
+            <div className="flex justify-end">
+              <Button type="submit" disabled={!newPost.trim() || createPost.isPending}>
+                <Send className="h-4 w-4 mr-2" />
+                {createPost.isPending ? 'Posting...' : 'Post'}
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>
 
-      <div>
-        <h2 className="mb-4 font-medium">Feed</h2>
-        {isLoading ? (
-          <div className="space-y-4">
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-32 w-full" />
-          </div>
-        ) : posts.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-              <MessageCircle className="mb-2 h-12 w-12 text-muted-foreground" />
-              <p className="text-muted-foreground">No posts yet. Be the first!</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {posts.map((post) => (
-              <PostCard
-                key={post.id}
-                post={post}
-                expanded={expandedPost === post.id}
-                onExpand={() =>
-                  setExpandedPost((p) => (p === post.id ? null : post.id))
-                }
-                replyContent={replyContent[post.id] ?? ""}
-                onReplyContentChange={(v) =>
-                  setReplyContent((prev) => ({ ...prev, [post.id]: v }))
-                }
-                onReply={() => handleReply(post.id)}
-                isReplying={createMutation.isPending}
-              />
-            ))}
-            <div className="flex justify-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function PostCard({
-  post,
-  expanded,
-  onExpand,
-  replyContent,
-  onReplyContentChange,
-  onReply,
-  isReplying,
-}: {
-  post: Post;
-  expanded: boolean;
-  onExpand: () => void;
-  replyContent: string;
-  onReplyContentChange: (v: string) => void;
-  onReply: () => void;
-  isReplying: boolean;
-}) {
-  const { data: replies = [] } = useQuery({
-    queryKey: ["post-replies", post.id],
-    queryFn: () => api.get<Reply[]>(`/community/posts/${post.id}/replies`),
-    enabled: expanded,
-  });
-
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">
-            {post.author?.full_name || post.author?.email || "Anonymous"}
-          </span>
-          <span>·</span>
-          <span>{new Date(post.created_at).toLocaleString()}</span>
+      {/* Posts Feed */}
+      {isLoading ? (
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading community posts...</p>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <p className="whitespace-pre-wrap">{post.content}</p>
-        <Button variant="ghost" size="sm" onClick={onExpand}>
-          {expanded ? "Hide replies" : "View replies"}
-        </Button>
-        {expanded && (
-          <div className="space-y-3 border-t pt-3">
-            <div className="flex gap-2">
-              <Textarea
-                value={replyContent}
-                onChange={(e) => onReplyContentChange(e.target.value)}
-                placeholder="Write a reply..."
-                className="min-h-[60px]"
-                disabled={isReplying}
-              />
-              <Button
-                size="sm"
-                onClick={onReply}
-                disabled={!replyContent.trim() || isReplying}
-              >
-                Reply
-              </Button>
-            </div>
-            <div className="space-y-2">
-              {replies.map((r) => (
-                <div
-                  key={r.id}
-                  className="rounded-lg border bg-muted/50 p-3 text-sm"
-                >
-                  <p className="font-medium">
-                    {r.author?.full_name || r.author?.email || "Anonymous"}
-                  </p>
-                  <p className="text-muted-foreground">{r.content}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {new Date(r.created_at).toLocaleString()}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
+      ) : topLevelPosts.length === 0 ? (
+        <Card className="p-8 text-center">
+          <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground">
+            No posts yet. Be the first to share!
+          </p>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {topLevelPosts.map((post: Post) => {
+            const replies = getReplies(post.id)
+            const isReplying = replyingTo === post.id
+
+            return (
+              <Card key={post.id} className="overflow-hidden">
+                <CardContent className="pt-6">
+                  {/* Post Header */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center">
+                        <User className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-semibold">
+                          {post.author_name || 'Anonymous User'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(post.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                    {(user?.role === 'admin' || user?.id === post.author_id) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deletePost.mutate(post.id)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Post Content */}
+                  <p className="text-sm mb-4 whitespace-pre-wrap">{post.content}</p>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 pt-3 border-t">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setReplyingTo(isReplying ? null : post.id)}
+                      className="text-muted-foreground"
+                    >
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      Reply {replies.length > 0 && `(${replies.length})`}
+                    </Button>
+                  </div>
+
+                  {/* Reply Form */}
+                  {isReplying && (
+                    <div className="mt-4 rounded-lg bg-muted/60 p-4">
+                      <Textarea
+                        placeholder="Write your reply..."
+                        value={replyContent}
+                        onChange={(e) => setReplyContent(e.target.value)}
+                        className="mb-2"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setReplyingTo(null)
+                            setReplyContent('')
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => handleReply(post.id)}
+                          disabled={!replyContent.trim() || createPost.isPending}
+                        >
+                          Reply
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Replies */}
+                  {replies.length > 0 && (
+                    <div className="mt-4 space-y-3 border-l-2 border-border pl-6">
+                      {replies.map((reply: Post) => (
+                        <div key={reply.id} className="rounded-lg bg-muted/60 p-3">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-full bg-primary/80 flex items-center justify-center">
+                                <User className="h-4 w-4 text-white" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold">
+                                  {reply.author_name || 'Anonymous User'}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {formatDate(reply.created_at)}
+                                </p>
+                              </div>
+                            </div>
+                            {(user?.role === 'admin' || user?.id === reply.author_id) && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => deletePost.mutate(reply.id)}
+                                className="text-destructive hover:text-destructive h-6 w-6 p-0"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                          <p className="text-sm whitespace-pre-wrap">{reply.content}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
 }

@@ -1,40 +1,39 @@
-import { Navigate, useLocation } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
-import { Loading } from "./loading";
-import type { UserRole } from "@/services/supabase";
+import { type ReactNode } from 'react'
+import { Navigate } from 'react-router-dom'
+import { useAuth } from '@/hooks/useAuth'
+import Loading from './loading'
 
 interface ProtectedRouteProps {
-  children: React.ReactNode;
-  requireAuth?: boolean;
-  roles?: UserRole[];
+  children: ReactNode
+  allowedRoles?: string[]
 }
 
-export function ProtectedRoute({
-  children,
-  requireAuth = true,
-  roles = [],
+export default function ProtectedRoute({ 
+  children, 
+  allowedRoles 
 }: ProtectedRouteProps) {
-  const { user, profile, loading } = useAuth();
-  const location = useLocation();
+  const { session, user, isLoading } = useAuth()
 
-  if (loading) {
-    return <Loading />;
+  if (isLoading) {
+    return <Loading />
   }
 
-  if (requireAuth === false) {
-    if (user) {
-      return <Navigate to="/chat" replace state={{ from: location }} />;
-    }
-    return <>{children}</>;
+  if (!session) {
+    return <Navigate to="/login" replace />
   }
 
-  if (!user) {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+  if (allowedRoles && user && !allowedRoles.includes(user.role)) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
+          <p className="text-muted-foreground">
+            You don't have permission to access this page.
+          </p>
+        </div>
+      </div>
+    )
   }
 
-  if (roles.length > 0 && profile && !roles.includes(profile.role)) {
-    return <Navigate to="/chat" replace />;
-  }
-
-  return <>{children}</>;
+  return <>{children}</>
 }

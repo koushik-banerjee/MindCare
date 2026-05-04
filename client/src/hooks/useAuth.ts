@@ -1,46 +1,110 @@
-import { useEffect, useState } from "react";
-import { User } from "@supabase/supabase-js";
-import { supabase, type UserProfile } from "@/services/supabase";
-import { api } from "@/services/api";
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { supabase, User } from '@/services/supabase'
+import { userApi } from '@/services/api'
 
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient()
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id).then(setProfile);
-      } else {
-        setProfile(null);
+  const { data: session, isLoading } = useQuery({
+    queryKey: ['session'],
+    queryFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      return session
+    },
+  })
+
+  const { data: user } = useQuery({
+    queryKey: ['user', session?.user.id],
+    queryFn: async () => {
+      if (!session?.user.id) return null
+      const { data } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', session.user.id)
+        .single()
+      return data
+    },
+    enabled: !!session?.user.id,
+  })
+
+  const signIn = useMutation({
+    mutationFn: async ({ email, password }: { email: string; password: string }) => {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['session'] })
+    },
+  })
+
+  const signUp = useMutation({
+    mutationFn: async ({
+      email,
+      password,
+      fullName,
+      role
+    }: {
+      email: string
+      password: string
+      fullName: string
+      role: 'student' | 'consultant' | 'admin'
+    }) => {
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+      })
+      if (authError) throw authError
+
+      if (authData.user) {
+        const { error: profileError } = await supabase
+          .from('users')
+          .insert({
+            id: authData.user.id,
+            email,
+            full_name: fullName,
+            role,
+          })
+        if (profileError) throw profileError
       }
-      setLoading(false);
-    });
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id).then(setProfile);
-      } else {
-        setProfile(null);
-      }
-    });
+      return authData
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['session'] })
+    },
+  })
 
-    return () => subscription.unsubscribe();
-  }, []);
+  const signOut = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.clear()
+    },
+  })
 
-  return { user, profile, loading, role: profile?.role ?? null };
-}
+  const updateProfile = useMutation({
+    mutationFn: async (updates: Partial<User>) => {
+      if (!user?.id) throw new Error('No user logged in')
+      return userApi.updateProfile(updates)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user', session?.user.id] })
+    },
+  })
 
-async function fetchProfile(_userId: string): Promise<UserProfile | null> {
-  try {
-    const data = await api.get<UserProfile>("/auth/profile");
-    return data;
-  } catch {
-    return null;
+  return {
+    session,
+    user,
+    isLoading,
+    signIn,
+    signUp,
+    signOut,
+    updateProfile,
   }
 }

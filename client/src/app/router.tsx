@@ -1,89 +1,84 @@
-import { lazy, Suspense } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
-import { Layout } from "./layout";
-import { ProtectedRoute } from "@/components/protected-route";
-import { Loading } from "@/components/loading";
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { Layout } from './layout'
+import ProtectedRoute from '@/components/protected-route'
 
-const LoginPage = lazy(() => import("@/pages/auth/login"));
-const RegisterPage = lazy(() => import("@/pages/auth/register"));
-const AuthCallbackPage = lazy(() => import("@/pages/auth/auth-callback"));
-const AiChatPage = lazy(() => import("@/pages/chat/ai-chat"));
-const BookConsultantPage = lazy(() => import("@/pages/booking/book-consultant"));
-const ResourceHubPage = lazy(() => import("@/pages/resources/resource-hub"));
-const PeerSupportPage = lazy(() => import("@/pages/community/peer-support"));
-const AdminDashboardPage = lazy(() => import("@/pages/admin/dashboard"));
+// Auth pages
+import Login from '@/pages/auth/login'
+import Register from '@/pages/auth/register'
 
-function AppRoutes() {
+// Feature pages
+import AIChat from '@/pages/chat/ai-chat'
+import BookConsultant from '@/pages/booking/book-consultant'
+import ResourceHub from '@/pages/resources/resource-hub'
+import PeerSupport from '@/pages/community/peer-support'
+import AdminDashboard from '@/pages/admin/dashboard'
+import IndexPage from '@/pages/frontpage/Index'
+import Profile from '@/pages/profile/Profile'
+
+export function Router() {
   return (
-    <Suspense fallback={<Loading />}>
+    <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Navigate to="/chat" replace />} />
+        <Route path="/" element={<IndexPage />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+
+        <Route element={<Layout />}>
           <Route
-            path="login"
-            element={
-              <ProtectedRoute requireAuth={false}>
-                <LoginPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="register"
-            element={
-              <ProtectedRoute requireAuth={false}>
-                <RegisterPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="auth/callback"
-            element={<AuthCallbackPage />}
-          />
-          <Route
-            path="chat"
+            path="/profile"
             element={
               <ProtectedRoute>
-                <AiChatPage />
+                <Profile />
               </ProtectedRoute>
             }
           />
+
           <Route
-            path="booking"
+            path="/chat"
             element={
               <ProtectedRoute>
-                <BookConsultantPage />
+                <AIChat />
               </ProtectedRoute>
             }
           />
+
           <Route
-            path="resources"
+            path="/booking"
+            element={
+              <ProtectedRoute allowedRoles={['student', 'consultant']}>
+                <BookConsultant />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/resources"
             element={
               <ProtectedRoute>
-                <ResourceHubPage />
+                <ResourceHub />
               </ProtectedRoute>
             }
           />
+
           <Route
-            path="community"
+            path="/community"
             element={
               <ProtectedRoute>
-                <PeerSupportPage />
+                <PeerSupport />
               </ProtectedRoute>
             }
           />
+
           <Route
-            path="admin"
+            path="/admin"
             element={
-              <ProtectedRoute roles={["admin"]}>
-                <AdminDashboardPage />
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminDashboard />
               </ProtectedRoute>
             }
           />
         </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </Suspense>
-  );
+    </BrowserRouter>
+  )
 }
-
-export { AppRoutes };
