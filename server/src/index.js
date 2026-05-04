@@ -11,6 +11,7 @@ import { logger } from './lib/logger.js'
 // Import routes
 import chatRoutes from './routes/chat.routes.js'
 import bookingRoutes from './routes/booking.routes.js'
+import authRoutes from './routes/auth.routes.js'
 import resourceRoutes from './routes/resource.routes.js'
 import communityRoutes from './routes/community.routes.js'
 import adminRoutes from './routes/admin.routes.js'
@@ -97,6 +98,7 @@ app.get('/readyz', async (req, res) => {
 // API Routes
 app.use('/api/chat', chatRoutes)
 app.use('/api/booking', bookingRoutes)
+app.use('/api/auth', authRoutes)
 app.use('/api/resources', resourceRoutes)
 app.use('/api/community', communityRoutes)
 app.use('/api/admin', adminRoutes)
